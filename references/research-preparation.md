@@ -12,7 +12,7 @@ Acquire the original abstract from the publisher or a reliable bibliographic rec
 
 ## Related-paper entry
 
-The CLI builds `https://www.connectedpapers.com/search?q=<encoded DOI/arXiv/title>` as a **search entry**. It does not inspect the service or prove coverage, successful graph creation or account entitlement.
+The CLI builds `https://www.connectedpapers.com/search?q=<encoded full official English title>` as a **search entry**. Always search by the complete official English paper title, not a DOI, arXiv ID or Chinese post headline. If the official title is unavailable, leave the entry pending. It does not inspect the service or prove coverage, successful graph creation or account entitlement.
 
 Use a controlled browser/search to find the actual paper and graph if possible; capture the returned URL, check the origin against the verified title/DOI, record a date and evidence, and preserve the exact URL. URL structure is not an API guarantee. A URL supplied by the user is `provided`, not automatically `verified`. Initial pass: reuse a matching supplied graph, otherwise try the controlled site once; after a block/timeout keep the search fallback and explain it. Do not retry indefinitely, generate unrelated graphs, bypass quotas or promise a universal direct-link API. No public supported API was established during this project's design.
 

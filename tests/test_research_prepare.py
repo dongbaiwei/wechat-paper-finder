@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -67,6 +68,21 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("尚未检查", report)
         self.assertEqual(paper["vision_provenance"]["tool_used"], "synthetic")
         self.assertEqual(paper["download"]["status"], "not_requested")
+
+    def test_connected_papers_search_uses_full_title_even_with_identifiers(self):
+        paper = manifest()["papers"][0]
+        paper["metadata"]["arxiv_id"] = "2601.00001"
+        paper["metadata"]["title"] = TITLE + ": RNA & protein, single-cell?"
+        graph = rp.connected_papers(paper, {"search_url": "https://www.connectedpapers.com/search?q=" + DOI})
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(graph["search_url"]).query)
+        self.assertEqual(query, {"q": [paper["metadata"]["title"]]})
+        self.assertEqual(graph["status"], "search_only")
+
+    def test_connected_papers_missing_title_does_not_use_doi_or_post_headline(self):
+        paper = manifest()["papers"][0]
+        paper["metadata"]["title"] = ""
+        paper["raw_title"] = "公众号中文导读标题"
+        self.assertEqual(rp.connected_papers(paper, {})["search_url"], "")
 
     def test_reviewed_computational_article_reports_resources_and_original_translation(self):
         result, report = self.prepare({"bibliography": {"article_type": "Article"}, "abstract": {"translation_zh": "我们测量蛋白质折叠。"}, "resources": [resource()], "checks": {"code": {"status": "verified", "reason": "Repository inspected; execution not tested"}}})

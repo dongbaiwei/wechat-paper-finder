@@ -55,7 +55,7 @@ def connected_papers(paper, supplied):
     """Never fabricate a graph identifier; a search entry is always labelled as such."""
     metadata = paper.get("metadata", {})
     doi = wpf.normalize_doi(metadata.get("doi", ""))
-    query = doi or metadata.get("arxiv_id") or metadata.get("title") or paper.get("raw_title", "")
+    query = metadata.get("title") or ""
     graph = copy.deepcopy(supplied or {})
     graph["search_url"] = "https://www.connectedpapers.com/search?" + urllib.parse.urlencode({"q": query}) if query else ""
     graph.setdefault("status", "search_only")
