@@ -1,0 +1,4 @@
+interface:
+  display_name: "公众号论文查找"
+  short_description: "从分享截图找推文全文，再识别论文、核实题名和链接，并按需下载全文"
+  default_prompt: "使用 $wechat-paper-finder 找出这篇公众号推文主要推荐的论文，核实正式题名并提供链接；如果我要求下载，再保存可获取的全文。"

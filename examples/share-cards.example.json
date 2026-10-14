@@ -1,0 +1,8 @@
+{
+  "cards": [
+    {"card_id": "card_001", "visible_title": "示例：某团队提出新的跨组学方法…", "title_truncated": true, "account_name": "示例公众号甲", "visible_snippet": "人工演示，不对应实际推文"},
+    {"card_id": "card_002", "visible_title": "示例：某领域多篇论文进展汇总", "title_truncated": false, "account_name": "示例公众号乙", "visible_snippet": "人工演示，一条推文可以介绍多篇论文"},
+    {"card_id": "card_003", "visible_title": "示例：新平台实现多模态分析", "title_truncated": false, "account_name": "示例公众号丙", "visible_snippet": "人工演示，不对应实际推文"}
+  ],
+  "notes": "Synthetic batch example; no private chat screenshot or personal identity is included."
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "source": "examples/post.md (synthetic demo)",
+  "document": {"text": "Demo: Attention Is All You Need, Vaswani et al., 2017. https://arxiv.org/abs/1706.03762", "links": [], "images": [], "metadata": {}},
+  "papers": [{
+    "id": "paper_001",
+    "role": "main",
+    "raw_title": "Attention Is All You Need",
+    "arxiv_id": "1706.03762",
+    "doi": "",
+    "author_hint": "Vaswani",
+    "year_hint": 2017,
+    "venue_hint": "",
+    "evidence": [{"kind": "literal_arxiv", "quote": "论文题目：Attention Is All You Need；作者线索：Vaswani；年份：2017；https://arxiv.org/abs/1706.03762", "source": "examples/post.md (synthetic demo)"}]
+  }]
+}
