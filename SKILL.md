@@ -1,21 +1,23 @@
 ---
 name: wechat-paper-finder
-description: Identify and verify scholarly papers recommended in WeChat public-account posts, screenshots, pasted text or saved articles. Return official titles, DOI/publisher/full-text links and optionally download verified lawful PDFs. Use for 公众号推文找论文、识别推文文献、根据截图找原论文 and downloading papers recommended by a post.
+description: Identify scholarly papers from WeChat posts, screenshots, DOI, arXiv IDs or saved articles and prepare evidence-backed research reports with author affiliations, Chinese abstract translation, dated journal impact factors, Connected Papers entries and data/code/software/materials/equipment checklists. Also find official links and optionally download lawful PDFs. Use for 公众号找论文、论文研究准备、复现资源清单 and scholarly paper information requests.
 ---
 
-# WeChat Paper Finder
+# Paper Research Preparation · WeChat Paper Finder
 
-Turn a recommendation post into an evidence-backed paper list. Use the scripts for repeatable metadata lookup, manifests and file validation; use agent reasoning to interpret translated titles, classify references and resolve ambiguity. The scripts alone do not understand every post.
+Turn a recommendation or paper identifier into an evidence-backed research preparation report. The skill keeps its original `wechat-paper-finder` invocation name. Use scripts for metadata lookup, evidence validation and exports; the agent must actually inspect sources, interpret affiliations and resource ownership, and translate abstracts. Running the CLI alone produces a draft with pending fields, not a completed research investigation.
+
+For a research preparation request deliver all three: basic information card, Connected Papers entry, and reproduction resource checklist. For an explicit link-only, download-only or single-module request, respect that scope.
 
 ## Intake and reading
 
-Accept a post URL, copied text, screenshots, saved HTML, PDF or Word. Read only the relevant input route:
+Accept a DOI, arXiv ID, paper/publisher URL, post URL, copied text, screenshots, saved HTML, PDF or Word. A supplied paper DOI can go directly to `prepare --doi "10.…" --out results/paper --cache work/http-cache`; use `--arxiv-id` for an explicit ID/version. For publisher URLs inspect official bibliographic information and confirm the DOI; do not treat every paper URL as a WeChat post. Read only the relevant input route:
 
 User/workspace extraction rules take precedence. If they require MinerU-to-Markdown before reading saved HTML or other documents, follow that route first; the HTML helper may still preserve link and article-identity metadata as a supplement.
 
 - **URL or saved HTML:** run `python <skill>/scripts/paper_finder.py extract --url "URL" --out "work/intake.json"` (or `--input "article.html"`). Read `document.text`, `document.links` and the image inventory in that JSON. Inspect images containing titles, first-page excerpts, citations or QR links. Body text alone may omit the only usable citation. If WeChat is unreadable, try an available controlled browser once, then continue with user-provided text/screenshots. Report `source_unreadable` when blocked; do not infer that there are no papers.
 - **Pasted text/Markdown:** save to the task's working directory, run `extract --input "post.md" --out "work/intake.json"`, then read the JSON.
-- **Shared article card / chat screenshot:** first read [references/share-card-discovery.md](references/share-card-discovery.md). Identify every visible article card, assign a stable `card_id`, and discover/verify each original post independently. One screenshot can contain multiple cards and one post can recommend multiple papers; never assume one-to-one. Read the full available post before paper lookup. Do not treat a truncated card headline as a paper title, the sender as the account, or chat time as publication time.
+- **Shared article card / chat screenshot:** first read [references/share-card-discovery.md](references/share-card-discovery.md). Identify every visible article card, assign a stable `card_id`, and search each independently. One screenshot can contain multiple cards and one post can recommend multiple papers; never assume one-to-one. Read the full post when available. If blocked, search visible Chinese headline/journal/topic clues in institute news and scientific reporting, then verify the candidate at its publisher. Keep source association `probable` until corroborated, independently of paper metadata verification. Do not treat a truncated card headline as a paper title, the sender as the account, or chat time as publication time.
 - **Article screenshots/images:** use the user's configured vision/OCR workflow. On this installation, read and use `ds-vision-skill`: pure text uses `baidu-ocr.ps1` or `windows-ocr.ps1`; understanding uses `vlm-vision.ps1 -ImagePath "..." -Prompt "Extract paper identifiers, titles, author/journal/year clues and their locations; distinguish quoted text from inference." -Channel glm-thinking -Json`. Preserve `task_type`, `tool_used`, `confidence`, `result`, `metadata`, reason from `result`, and attach the image/location to the evidence. If that skill is absent on another machine, use an available OCR/vision tool and disclose it. Treat OCR substitutions as uncertain until verified.
 - **PDF/Word/documents:** use the installed `mineru-document-extractor` to convert to Markdown first, then read the Markdown. On Windows use `mineru-open-api.cmd flash-extract "file.pdf" -o "work/extracted"`. Flash mode is limited to 10 MB/20 pages; larger files or HTML conversion via MinerU require its token-enabled mode. If the required parser is missing, explain the specific missing dependency and use pasted text or another user-authorized document conversion path. Do not silently feed unsupported binary files to the text extractor.
 
@@ -66,9 +68,27 @@ On success the script checks the PDF signature, readability, nonzero pages, expe
 
 If supplements are requested, use the publisher's article page or a suitable installed downloader; keep them separate from main PDFs and record each result. Without a supplement request, this script retrieves main text only.
 
+## Research preparation
+
+Read [references/research-preparation.md](references/research-preparation.md) when preparing basic information, graph entries or a reproduction checklist. For an existing resolved paper list start with:
+
+```text
+python <skill>/scripts/paper_finder.py prepare --manifest results/paper/papers.json --out results/paper
+```
+
+The command retains the original manifest and creates `research-details.json`, `research-report.md` and `reproduction-checklist.csv`. Read the draft, inspect authoritative sources, fill `research-details.json` using that reference's schema, and rerun `prepare` with `--details` pointing to the filled file. Record actual inspection coverage and evidence locations. Review the generated report before delivering it.
+
+Always show author-to-affiliation mappings, paper type, full DOI and official URL. JIF needs metric year, journal, source and lookup date. Translate the original abstract, not S2 TL;DR or a search snippet; preserve scientific qualifications. Missing original abstract stays pending. Do not claim the paper was fully read from an abstract/preview.
+
+Connected Papers search entries are generated without network access and do not imply a graph exists. Try the controlled website once to locate the actual graph if available, inspect its origin, and record the returned URL and evidence; never guess a graph identifier from a DOI/title. Preserve user-provided graph links as `provided` until inspected; use `verified` only with matching origin and inspection evidence. Keep a clearly labelled search fallback if unavailable. Graph similarity is not a direct citation relationship.
+
+Resource discovery covers raw/processed data, code, software environment, materials, equipment, supplements and protocols. Read availability statements, Methods and relevant supplements first. After the required Markdown conversion, `scan-resources --input work/paper.md --source-url "official URL" --doi "10.…" --out work/resource-candidates.json` can find URL leads; inspect each before adding verified records. Separate author-provided, third-party, dependency and cited-work resources, with the actual owning paper DOI/arXiv ID. For Perspective/review papers scope the report to their own resources, optionally offering a separately attributed cited-study investigation. No guessed versions/models and no numerical reproducibility score. The checklist does not execute code or download datasets.
+
 ## Deliver
 
-Return a concise table of official title, authors/year, DOI/publisher link, matching status and download outcome. Include pending candidates and specific failures. Link local downloaded files when present. Keep `report.md`, `papers.json`, `references.bib` and `PDFs/` together. BibTeX includes verified records only. Add provenance for manually completed downloads and rebuild exports with `report --manifest ... --out ...`.
+**DOI is mandatory in every paper result**, including concise chat replies, link-only answers, download outcomes and multi-paper reports. For each paper, show `DOI: 10.…` as visible, copyable text and provide its canonical `https://doi.org/<DOI>` link; a link labelled only “DOI” or “原文” does not satisfy this requirement. Use a dedicated DOI column in tables. Mark candidate or source-only identifiers as `待核验`; if no DOI has been verified or found, explicitly show `DOI: 未查到／待确认`. Say `未分配 DOI` only when authoritative evidence establishes this. Never invent a DOI or substitute an arXiv/PMID identifier for one; list other identifiers separately.
+
+Return official title, authors/year, the mandatory DOI field, publisher link, matching status and download outcome. For research preparation also link `research-report.md`, `research-details.json` and `reproduction-checklist.csv`, stating material gaps and the graph status. Include pending candidates and specific failures. Link local downloaded files when present. Keep exports and `PDFs/` together. BibTeX includes verified records only. Add provenance for manually completed downloads and rebuild exports with `report --manifest ... --out ...`.
 
 Do not claim all cited works were identified when the source was incomplete. Distinguish “identified but no accessible PDF found” from “paper not identified”. Keep source excerpts, local paths, personal email, caches and downloaded papers out of a public project repository.
 

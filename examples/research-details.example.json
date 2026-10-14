@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "papers": [{
+    "id": "paper_001", "doi": "10.1234/example.2026",
+    "research": {
+      "bibliography": {
+        "title_zh": "利用深度学习研究蛋白质折叠的虚构示例", "article_type": "Article",
+        "author_details": [{"name": "Alex Chen", "affiliations": ["Example University"], "roles": ["通讯作者"]}],
+        "evidence": [{"source_url": "https://publisher.example/article", "location": "Synthetic Authors and Affiliations", "quote": "Alex Chen, Example University"}]
+      },
+      "abstract": {"original": "This fictional example measures protein folding.", "translation_zh": "这个虚构示例测量蛋白质折叠。", "kind": "original_abstract", "source_url": "https://publisher.example/article"},
+      "impact_factor": {"value": 2.1, "metric_year": 2025, "journal": "Example Journal", "source_url": "https://publisher.example/metrics", "checked_at": "2026-10-14"},
+      "connected_papers": {"status": "search_only", "note": "虚构 DOI 的演示入口，不能据此声称实际图谱存在。"},
+      "coverage": [{"source_url": "https://publisher.example/article", "scope": "full_text", "checked_at": "2026-10-14", "note": "Synthetic fixture, no real source was inspected"}],
+      "resources": [{
+        "kind": "code", "name": "Synthetic analysis repository", "url": "https://github.com/example/research",
+        "status": "verified", "scope": "author_provided", "access": "unknown", "version": "v1.0",
+        "evidence": [{"source_url": "https://publisher.example/article", "location": "Synthetic Code Availability", "quote": "Fictional example points to the analysis repository"}]
+      }],
+      "checks": {"code": {"status": "verified", "reason": "Synthetic schema demonstration; real code was not inspected or executed"}},
+      "notes": ["全部信息为虚构演示，不代表真实论文或资源。"]
+    }
+  }]
+}

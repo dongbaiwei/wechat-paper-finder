@@ -313,6 +313,28 @@ class DownloadTests(unittest.TestCase):
 
 
 class OAAndExportTests(unittest.TestCase):
+    def test_reports_show_full_doi_and_missing_or_unverified_status(self):
+        verified = verified_paper()
+        verified["metadata"].pop("doi_url")  # The identifier alone must produce a link.
+        pending = wpf.new_paper(2, raw_title="Source hint", doi="10.1234/pending")
+        preprint = wpf.new_paper(3, raw_title="Preprint", arxiv_id="1706.03762v2")
+        manifest = intake([verified, pending, preprint])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            wpf.export(manifest, root / "post")
+            wpf.collect_manifests([root / "post" / "papers.json"], root / "summary")
+            for report in [root / "post" / "report.md", root / "summary" / "report.md"]:
+                with self.subTest(report=report.parent.name):
+                    rows = report.read_text(encoding="utf-8").splitlines()
+                    first = next(row for row in rows if row.startswith("|") and "paper_001" in row)
+                    second = next(row for row in rows if row.startswith("|") and "paper_002" in row)
+                    third = next(row for row in rows if row.startswith("|") and "paper_003" in row)
+                    self.assertIn(f"[{DOI}](https://doi.org/{DOI})", first)
+                    self.assertNotIn("待核验", first)
+                    self.assertIn("[10.1234/pending](https://doi.org/10.1234/pending)（待核验）", second)
+                    self.assertIn("未查到／待确认", third)
+                    self.assertNotIn("doi.org/", third)
+
     def test_unpaywall_locations_preserve_version_and_license(self):
         client = FakeClient([
             {"resultList": {"result": []}},

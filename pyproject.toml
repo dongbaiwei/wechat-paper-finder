@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wechat-paper-finder"
-version = "0.1.0"
-description = "Evidence-preserving WeChat paper discovery skill and CLI"
+version = "0.2.0"
+description = "Paper research preparation skill: bibliographic cards, graph entries and reproducibility resources"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -24,5 +24,5 @@ dev = ["pypdf>=5", "PyYAML>=6"]
 wechat-paper-finder = "paper_finder:main"
 
 [tool.setuptools]
-py-modules = ["paper_finder"]
+py-modules = ["paper_finder", "research_prepare"]
 package-dir = {"" = "scripts"}

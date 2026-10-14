@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "source": "Synthetic offline example; all paper and institution information is fictional",
+  "papers": [{
+    "id": "paper_001", "role": "main", "doi": "10.1234/example.2026",
+    "metadata": {
+      "title": "A distinctive study of protein folding with deep learning",
+      "authors": ["Alex Chen"], "year": 2026, "venue": "Example Journal",
+      "doi": "10.1234/example.2026", "doi_url": "https://doi.org/10.1234/example.2026",
+      "publisher_url": "https://publisher.example/article", "type": "journal-article",
+      "version": "published_record"
+    },
+    "verification": {"status": "verified", "method": "synthetic_fixture", "reasons": ["Fictional offline fixture; not a real verified publication"]}
+  }]
+}

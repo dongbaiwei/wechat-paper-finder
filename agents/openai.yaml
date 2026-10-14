@@ -1,4 +1,4 @@
 interface:
-  display_name: "公众号论文查找"
-  short_description: "从分享截图找推文全文，再识别论文、核实题名和链接，并按需下载全文"
-  default_prompt: "使用 $wechat-paper-finder 找出这篇公众号推文主要推荐的论文，核实正式题名并提供链接；如果我要求下载，再保存可获取的全文。"
+  display_name: "论文研究准备助手"
+  short_description: "从截图或 DOI 找论文，整理作者机构与中文摘要、关联图谱入口和有证据的复现准备清单"
+  default_prompt: "使用 $wechat-paper-finder 为这篇论文生成研究准备报告：完整 DOI、作者机构、带年份的影响因子、中文摘要、Connected Papers 入口及数据代码和材料仪器清单。"

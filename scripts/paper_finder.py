@@ -24,7 +24,7 @@ from difflib import SequenceMatcher
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DOI_RE = re.compile(r"10\.\d{4,9}/[^\s<>\"`\u201c\u201d\u3002\uFF0C\uFF1B]+", re.I)
 ARXIV_RE = re.compile(r"(?:arxiv\s*:\s*|arxiv\.org/(?:abs|pdf)/)([a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)", re.I)
 ROLES = {"main", "background", "related", "unknown"}
@@ -339,7 +339,9 @@ def crossref_record(item):
     date = item.get("published", item.get("published-online", item.get("issued", {}))).get("date-parts", [[]])
     doi = normalize_doi(item.get("DOI", ""))
     authors = [clean(" ".join(filter(None, [a.get("given"), a.get("family")]))) or a.get("name", "") for a in item.get("author", [])]
-    return {"doi": doi, "title": clean(first(item.get("title", []))), "authors": authors, "year": date[0][0] if date and date[0] else None, "venue": clean(first(item.get("container-title", []))), "publisher": item.get("publisher", ""), "type": item.get("type", ""), "version": "preprint" if item.get("type") == "posted-content" else "published_record", "doi_url": f"https://doi.org/{doi}" if doi else "", "publisher_url": item.get("resource", {}).get("primary", {}).get("URL") or item.get("URL", ""), "metadata_source": "Crossref", "metadata_url": "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="")}
+    author_details = [{"name": name, "affiliations": [clean(a.get("name", "")) for a in author.get("affiliation", []) if a.get("name")], "orcid": author.get("ORCID", ""), "roles": []} for name, author in zip(authors, item.get("author", []))]
+    abstract = parse_html(item.get("abstract", "")).text() if item.get("abstract") else ""
+    return {"doi": doi, "title": clean(first(item.get("title", []))), "authors": authors, "author_details": author_details, "abstract": abstract, "year": date[0][0] if date and date[0] else None, "published_date_parts": date[0] if date else [], "venue": clean(first(item.get("container-title", []))), "publisher": item.get("publisher", ""), "type": item.get("type", ""), "version": "preprint" if item.get("type") == "posted-content" else "published_record", "doi_url": f"https://doi.org/{doi}" if doi else "", "publisher_url": item.get("resource", {}).get("primary", {}).get("URL") or item.get("URL", ""), "metadata_source": "Crossref", "metadata_url": "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="")}
 
 
 def title_similarity(a, b):
@@ -398,7 +400,7 @@ def arxiv_record(identifier, client):
         raise PaperError("arXiv identifier/version mismatch")
     title = clean(entry.findtext("a:title", "", ns))
     doi = normalize_doi(entry.findtext("{http://arxiv.org/schemas/atom}doi", ""))
-    return {"arxiv_id": resolved, "doi": doi, "title": title, "authors": [clean(a.findtext("a:name", "", ns)) for a in entry.findall("a:author", ns)], "year": int(entry.findtext("a:published", "0000", ns)[:4]), "venue": "arXiv", "version": "preprint", "publisher_url": "https://arxiv.org/abs/" + resolved, "doi_url": "https://doi.org/" + doi if doi else "", "metadata_source": "arXiv", "metadata_url": url, "fulltext_url": "https://arxiv.org/pdf/" + resolved, "access_basis": "open_access", "fulltext_source": "arXiv"}
+    return {"arxiv_id": resolved, "doi": doi, "title": title, "abstract": clean(entry.findtext("a:summary", "", ns)), "authors": [clean(a.findtext("a:name", "", ns)) for a in entry.findall("a:author", ns)], "year": int(entry.findtext("a:published", "0000", ns)[:4]), "venue": "arXiv", "version": "preprint", "publisher_url": "https://arxiv.org/abs/" + resolved, "doi_url": "https://doi.org/" + doi if doi else "", "metadata_source": "arXiv", "metadata_url": url, "fulltext_url": "https://arxiv.org/pdf/" + resolved, "access_basis": "open_access", "fulltext_source": "arXiv"}
 
 
 def resolve_papers(intake, client):
@@ -607,7 +609,7 @@ def collect_manifests(paths, outdir):
     """Summarize many posts without losing per-post evidence or version identity."""
     outdir = Path(outdir).resolve()
     posts, work_map = [], {}
-    rows = ["# 多推文论文清单", "", "每张分享卡片独立核验；同一推文可以对应零篇、一篇或多篇论文。", "", "| 推文 | 题名／线索 | DOI／原文 | 推文核验 | 论文核验 | 全文 |", "|---|---|---|---|---|---|"]
+    rows = ["# 多推文论文清单", "", "每张分享卡片独立核验；同一推文可以对应零篇、一篇或多篇论文。", "", "| 推文 | 题名／线索 | DOI | 原文 | 推文核验 | 论文核验 | 全文 |", "|---|---|---|---|---|---|---|"]
     for index, path in enumerate(paths, 1):
         path = Path(path).resolve()
         data = read_json(path)
@@ -617,14 +619,14 @@ def collect_manifests(paths, outdir):
         post = {"id": post_id, "manifest_path": str(path), "source": data.get("source", ""), "title": source_title, "source_verification": data.get("source_verification"), "papers": data["papers"]}
         posts.append(post)
         if not data["papers"]:
-            rows.append(f"| {md(post_id)} | {md(source_title)}（尚未识别论文） | | {md(source_status)} | unresolved | |")
+            rows.append(f"| {md(post_id)} | {md(source_title)}（尚未识别论文） | 未查到／待确认 | | {md(source_status)} | unresolved | |")
         for paper in data["papers"]:
             metadata = paper.get("metadata", {})
             identity = ("arxiv:" + metadata["arxiv_id"]) if metadata.get("arxiv_id") else normalize_doi(metadata.get("doi", ""))
             if identity and paper.get("verification", {}).get("status") == "verified":
                 work_map.setdefault(identity, []).append({"post_id": post_id, "paper_id": paper["id"]})
             title = metadata.get("title") or paper.get("raw_title") or paper.get("doi") or paper.get("arxiv_id")
-            link = markdown_link("原文", metadata.get("doi_url") or metadata.get("publisher_url", ""))
+            link = markdown_link("原文", metadata.get("publisher_url") or metadata.get("doi_url", ""))
             download = paper.get("download", {})
             fulltext = md(download.get("status", "not_requested"))
             relative = download.get("path", "")
@@ -632,7 +634,7 @@ def collect_manifests(paths, outdir):
                 target = (path.parent / relative).resolve()
                 if target.is_relative_to(path.parent) and target.is_file() and download.get("status") in {"downloaded", "already_present"}:
                     fulltext = f"[PDF]({urllib.parse.quote(Path(os.path.relpath(target, outdir)).as_posix())})"
-            rows.append(f"| {md(post_id)} / {md(paper['id'])} | {md(title)} | {link} | {md(source_status)} | {md(paper.get('verification', {}).get('status', 'unresolved'))} | {fulltext} |")
+            rows.append(f"| {md(post_id)} / {md(paper['id'])} | {md(title)} | {doi_display(paper)} | {link} | {md(source_status)} | {md(paper.get('verification', {}).get('status', 'unresolved'))} | {fulltext} |")
     collection = {"schema_version": 1, "created_at": now(), "posts": posts, "unique_verified_works": [{"identifier": key, "occurrences": occurrences} for key, occurrences in work_map.items()]}
     write_json(outdir / "collection.json", collection)
     rows.extend(["", f"推文数：{len(posts)}；论文条目数：{sum(len(p['papers']) for p in posts)}；唯一已核验作品数：{len(work_map)}。", "", "完整证据和候选保留在各推文的 papers.json 中；同一 DOI 的多个来源保留关联，预印本及版本单独记录。", ""])
@@ -667,6 +669,18 @@ def bib_escape(value):
     return "".join(mapping.get(c, c) for c in clean(value))
 
 
+def doi_display(paper):
+    """Keep the full DOI visible, distinguishing metadata from unverified hints."""
+    metadata = paper.get("metadata", {})
+    metadata_doi = normalize_doi(metadata.get("doi") or metadata.get("doi_url", ""))
+    doi = metadata_doi or normalize_doi(paper.get("doi", ""))
+    if not doi:
+        return "未查到／待确认"
+    label = markdown_link(md(doi), "https://doi.org/" + doi)
+    verified = metadata_doi and paper.get("verification", {}).get("status") == "verified"
+    return label if verified else label + "（待核验）"
+
+
 def export(manifest, outdir):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -675,20 +689,19 @@ def export(manifest, outdir):
     if manifest.get("source_discovery"):
         source_check = manifest.get("source_verification", {})
         rows.extend(["推文来源核验：" + md(source_check.get("status", "needs_review")), "", "推文：" + md(source_check.get("resolved_title", "")) + "；公众号：" + md(source_check.get("resolved_account", "")), ""])
-    rows.extend(["| ID | 角色 | 正式题名／原始线索 | 作者／年份 | 链接 | 匹配 | 全文 |", "|---|---|---|---|---|---|---|"])
+    rows.extend(["| ID | 角色 | 正式题名／原始线索 | 作者／年份 | DOI | 出版社／原文 | 匹配 | 全文 |", "|---|---|---|---|---|---|---|---|"])
     bib, exported_ids = [], set()
     for paper in manifest["papers"]:
         metadata = paper.get("metadata", {})
         status = paper.get("verification", {}).get("status", "unresolved")
-        links = [markdown_link("DOI", metadata.get("doi_url", "")), markdown_link("出版社／原文", metadata.get("publisher_url", ""))]
-        links = " · ".join(filter(None, links))
+        links = markdown_link("出版社／原文", metadata.get("publisher_url", ""))
         authors = ", ".join(metadata.get("authors", [])[:2])
         download = paper.get("download", {})
         fullname = download.get("status", "not_requested")
         relative = download.get("path", "")
         if relative.startswith("PDFs/") and ".." not in Path(relative).parts and fullname in {"downloaded", "already_present"}:
             fullname = f"[{fullname}]({urllib.parse.quote(relative)})"
-        rows.append(f"| {md(paper['id'])} | {md(paper.get('role'))} | {md(metadata.get('title') or paper.get('raw_title') or paper.get('doi') or paper.get('arxiv_id'))} | {md(authors)} / {md(metadata.get('year'))} | {links} | {md(status)} | {fullname} |")
+        rows.append(f"| {md(paper['id'])} | {md(paper.get('role'))} | {md(metadata.get('title') or paper.get('raw_title') or paper.get('doi') or paper.get('arxiv_id'))} | {md(authors)} / {md(metadata.get('year'))} | {doi_display(paper)} | {links} | {md(status)} | {fullname} |")
         identity = metadata.get("arxiv_id") or metadata.get("doi") or metadata.get("title")
         if status == "verified" and identity and identity not in exported_ids:
             exported_ids.add(identity)
@@ -754,11 +767,43 @@ def main(argv=None):
     collect = commands.add_parser("collect", help="Build a many-post, many-paper summary while preserving per-post provenance")
     collect.add_argument("--manifests", type=Path, nargs="+", required=True)
     collect.add_argument("--out", type=Path, required=True)
+    prepare = commands.add_parser("prepare", help="Create a research dossier, graph entry and evidence-backed reproduction checklist")
+    origin = prepare.add_mutually_exclusive_group(required=True)
+    origin.add_argument("--manifest", type=Path)
+    origin.add_argument("--doi", help="Resolve a DOI directly, then create a research dossier")
+    origin.add_argument("--arxiv-id", help="Resolve an explicit arXiv ID/version")
+    prepare.add_argument("--details", type=Path, help="Agent-reviewed research details bound to matching paper IDs and DOI/arXiv identifiers")
+    prepare.add_argument("--out", type=Path, required=True)
+    prepare.add_argument("--cache", type=Path)
+    scan = commands.add_parser("scan-resources", help="Find unverified resource URL leads in already-converted Markdown")
+    scan.add_argument("--input", type=Path, required=True)
+    scan.add_argument("--source-url", required=True)
+    scan.add_argument("--doi", default="")
+    scan.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     email = os.environ.get("UNPAYWALL_EMAIL", "")
     try:
         client = Client(getattr(args, "cache", None), email)
-        if args.command == "discover":
+        if args.command == "prepare":
+            from research_prepare import prepare_report
+            if args.manifest:
+                if args.manifest.resolve().parent != args.out.resolve():
+                    raise PaperError("Prepare --out must be the manifest directory to preserve PDF paths")
+                intake = read_json(args.manifest)
+            else:
+                doi = normalize_doi(args.doi or "")
+                if args.doi and not doi:
+                    raise PaperError("A valid DOI is required")
+                intake = resolve_papers({"schema_version": 1, "source": args.doi or args.arxiv_id, "papers": [new_paper(1, role="main", doi=doi, arxiv_id=args.arxiv_id or "")]}, client)
+            details = json.loads(args.details.read_text(encoding="utf-8-sig")) if args.details else None
+            result = prepare_report(intake, args.out, details)
+            summary = {"status": "prepared", "papers": len(result["papers"]), "verified": sum(p.get("verification", {}).get("status") == "verified" for p in result["papers"]), "path": str(args.out), "note": "Agent must inspect sources, verify resource ownership and translate abstracts; empty fields remain pending."}
+        elif args.command == "scan-resources":
+            from research_prepare import scan_resources
+            result = scan_resources(args.input, args.source_url, args.doi)
+            write_json(args.out, result)
+            summary = {"status": "resource_candidates", "candidates": len(result["candidates"]), "path": str(args.out)}
+        elif args.command == "discover":
             share = json.loads(args.input.read_text(encoding="utf-8-sig"))
             result = discovery_plan(share)
             write_json(args.out, result)
@@ -806,7 +851,10 @@ def main(argv=None):
             paper = next((p for p in result["papers"] if p["id"] == args.paper), None)
             if not paper or not 1 <= args.candidate <= len(paper.get("candidates", [])):
                 raise PaperError("Paper/candidate not found")
-            paper["metadata"] = paper["candidates"][args.candidate - 1]
+            selected = paper["candidates"][args.candidate - 1]
+            if paper.get("research") and (paper.get("metadata", {}).get("doi"), paper.get("metadata", {}).get("arxiv_id")) != (selected.get("doi"), selected.get("arxiv_id")):
+                raise PaperError("Research dossier belongs to the previous candidate; review/reset it before changing paper identity")
+            paper["metadata"] = selected
             paper["verification"] = {"status": "verified", "method": "reviewed", "checked_at": now(), "evidence_url": args.evidence_url, "reasons": [args.note]}
             write_json(args.manifest, result)
             export(result, args.manifest.parent)
@@ -817,13 +865,22 @@ def main(argv=None):
             if args.manifest.resolve().parent != args.out.resolve():
                 raise PaperError("Download --out must be the manifest directory, so existing file paths remain valid")
             result = download_papers(read_json(args.manifest), args.out, client, email, args.include_related, args.max_mb)
-            export(result, args.out)
+            if any(p.get("research") for p in result["papers"]):
+                from research_prepare import prepare_report
+                prepare_report(result, args.out)
+            else:
+                export(result, args.out)
             summary = {"status": "download_batch_finished", "results": {p["id"]: p.get("download", {}).get("status") for p in result["papers"]}, "path": str(args.out)}
         elif args.command == "collect":
             result = collect_manifests(args.manifests, args.out)
             summary = {"status": "collected", "posts": len(result["posts"]), "unique_verified_works": len(result["unique_verified_works"]), "path": str(args.out)}
         else:
-            export(read_json(args.manifest), args.out)
+            result = read_json(args.manifest)
+            if any(p.get("research") for p in result["papers"]):
+                from research_prepare import prepare_report
+                prepare_report(result, args.out)
+            else:
+                export(result, args.out)
             summary = {"status": "reported", "path": str(args.out)}
         print(json.dumps(summary, ensure_ascii=False))
         return 0

@@ -1,16 +1,69 @@
-# 公众号论文查找 · WeChat Paper Finder
+# 论文研究准备助手 · WeChat Paper Finder
 
-从微信公众号链接、截图或复制的正文找到推文推荐的原论文，核实正式题名、DOI 和出版社链接，并按需下载可合法获取的 PDF。
+从 DOI、论文链接、微信公众号推荐或截图定位论文，输出基本信息卡、Connected Papers 入口和有证据的复现资源清单；按需下载可合法获取的正文 PDF。保留 `$wechat-paper-finder` 调用名和仓库名。
 
 这是一个 **Codex Skill + Python 命令行工具** 小项目。模型负责理解推文、处理中文译名和判断论文角色；脚本负责元数据查询、候选整理、下载与文件校验。完整 Skill 需要具备相应工具的 agent；CLI 本身主要识别明确的标识符和带标签的题名。
+
+## v0.2：三个交付模块
+
+| 模块 | 输出 | 实际执行方式 |
+|---|---|---|
+| 基本信息卡 | 题名、完整 DOI、作者—机构对应、文章类型、带年份和来源的 JIF、原始摘要的中文翻译 | Crossref/arXiv 提供可用书目信息；agent 查阅出版社及指标页面，核对并翻译 |
+| 关联文献入口 | Connected Papers 检索入口，以及找到后记录的实际图谱链接 | CLI 生成检索入口；agent 获取真实图谱地址、核对起点；失败时保留明确标注的检索入口 |
+| 复现准备清单 | 原始／处理数据、代码、软件环境、材料、仪器、补充材料、协议和缺失信息 | agent 查阅声明、方法和附件，脚本保存资源归属及证据、检查字段并导出 Markdown/CSV |
+
+**单独运行 CLI 得到的是待补全草稿。** 它不会自动翻译摘要、推断仪器型号、执行代码或穷尽寻找数据。Skill 中的 agent 按工作流实际查阅并完成这些步骤。未知信息保持待确认；“找到资源”不等于“实际复现成功”。
+
+Connected Papers 图谱网址不会根据 DOI 猜造。`search_only` 是检索入口，`provided` 是尚未核验的用户图谱链接，`verified` 表示 agent 已检查起点论文并登记证据。第三方网站覆盖、登录、额度或页面变动会影响获取最终图谱网址。
+
+基本调用：
+
+```text
+使用 $wechat-paper-finder 为这篇论文生成研究准备报告：[DOI、链接或截图]
+需要作者与所属机构、完整 DOI、带年份的影响因子、中文摘要、
+Connected Papers 入口，以及数据、代码、环境、材料仪器和补充材料的清单。
+```
+
+命令行直接建立草稿：
+
+```bash
+python scripts/paper_finder.py prepare --doi '10.你的DOI' --out results/paper --cache work/cache
+# 已有 papers.json：
+python scripts/paper_finder.py prepare --manifest results/paper/papers.json --out results/paper
+```
+
+agent 阅读生成的 `research-details.json`，按 [研究准备工作流与字段](references/research-preparation.md) 查阅并填写，然后合并：
+
+```bash
+python scripts/paper_finder.py prepare --manifest results/paper/papers.json --details work/reviewed-details.json --out results/paper
+```
+
+也可先对已经按要求转换的 Markdown 收集资源 URL 线索：
+
+```bash
+python scripts/paper_finder.py scan-resources --input work/paper.md --source-url 'https://出版社/文章' --doi '10.你的DOI' --out work/resource-candidates.json
+```
+
+扫描结果全部待核验；References 中的代码可能属于另一篇论文。软件版本、实验型号及访问条件以真实来源为准。对于 Review/Perspective，本文资源与引用研究资源分别记录，不把引用的研究误当成本文原始实验。
+
+离线演示使用虚构题名、DOI、机构和证据，演示导出而不查询虚构 DOI：
+
+```bash
+python scripts/paper_finder.py report --manifest examples/research-manifest.example.json --out results/research-demo
+python scripts/paper_finder.py prepare --manifest results/research-demo/papers.json --details examples/research-details.example.json --out results/research-demo
+```
+
+新输出增加 `research-report.md`、`research-details.json` 和可用 Excel 打开的 UTF-8 CSV `reproduction-checklist.csv`；旧清单、BibTeX 和 PDF 仍保留在同一目录。请求资源清单本身不会下载大型数据或安装运行环境。
 
 ## 能做什么
 
 - 接收微信公众号 URL、保存的 HTML、文字或 Markdown；通过 agent 的 OCR/视觉、文档工具接收截图和 PDF/Word。
 - 接收导师转发的文章分享卡片截图：识别可见标题、公众号名和摘要，搜索并核对原推文，再从全文识别论文。
+- 原公众号不可读时，可从中文导读检索科研报道并核对出版社；论文身份和截图归属分别标注，研究报告可以保留“对应关系待确认”。
 - 一张截图含多张卡片时逐条查找；一篇推文介绍多篇论文时逐篇记录，最后汇总并保留推文与论文的对应关系。
 - 保留原文证据、来源与匹配依据，区分主要推荐、背景引用和延伸阅读。
 - 用 Crossref 查询 DOI/题名，用 arXiv 查询明确的 ID 和版本。
+- 每次逐篇明确列出完整 DOI 号和可点击的 DOI 链接；聊天回复、下载结果及汇总报告均适用。候选 DOI 标注“待核验”，查不到时明确显示“未查到／待确认”。
 - 发现并保留候选；存在冲突或只有中文译名时由 agent 进一步核验。
 - 从 arXiv、Europe PMC OA、Unpaywall 或明确授权的链接获取正文 PDF。
 - 检查 PDF 格式、可读性和首页题名；记录版本、来源、页数与 SHA-256。
@@ -156,6 +209,7 @@ python -m unittest discover -s tests -v
 SKILL.md                    agent 工作流入口
 agents/openai.yaml          技能显示信息
 scripts/paper_finder.py      提取、检索、下载和导出 CLI
+scripts/research_prepare.py  研究信息、图谱状态、资源证据检查与报告/CSV
 scripts/install_skill.py     安装技能有效载荷
 references/                 匹配规则与输出格式
 examples/                   不含私人信息的演示输入

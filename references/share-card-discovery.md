@@ -1,6 +1,6 @@
 # From a shared card to the original article
 
-Use this route when the screenshot is of a WeChat conversation, forwarded article card, share sheet, notification, reading list or article preview. A card's headline usually describes the post, not the paper. First discover the full post; only then identify papers.
+Use this route when the screenshot is of a WeChat conversation, forwarded article card, share sheet, notification, reading list or article preview. A card's headline usually describes the post, not the paper. Prefer the full post; when unavailable, use the visible headline to discover paper candidates through separately attributed institute news or scientific reporting.
 
 If multiple cards appear, preserve top-to-bottom `card_id` and separate each card's title, account, snippet and location. Use `{"cards": [card1, card2], "vision_provenance": {...}}` as the input to `discover`. Its output contains one plan per card. For extraction specify `--discovery work/discovery.json --card card_001`; omitting `--card` for a batch is an error to prevent accidental mixing. Keep one output folder per card. A post's `papers` array may have zero, one or many records. Use `collect` to summarize them; card count is never the expected paper count.
 
@@ -42,6 +42,6 @@ If more than one candidate remains plausible, show the small candidate list and 
 
 ## Continue to papers
 
-Proceed with normal extraction only after source identity is corroborated. Read the full available body and relevant images, follow the “原文链接” or paper reference where it helps, then build the paper list. Keep both `source_verification` (right post?) and each paper's `verification` (right paper?) in the report/manifest.
+Read the full available body and relevant images, follow the “原文链接” or paper reference where it helps, then build the paper list. If the original remains blocked, search the visible Chinese headline together with journal/topic/affiliation clues without restricting the domain to WeChat. Use recovered DOI/title clues to check the publisher or authoritative metadata. Keep both `source_verification` (right post?) and each paper's `verification` (right paper?) in the report/manifest. The paper's research dossier can proceed with an explicitly `probable` association; never imply the original post was read or every paper in it found.
 
 Report “card read, original post still unconfirmed” separately from “original post found, paper still unconfirmed”. If only secondary evidence is available, provide provisional candidates with that limitation; defer automatic paper download until both source and paper identity are adequately established.
