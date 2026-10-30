@@ -1,260 +1,212 @@
-# 论文批量信息卡 · WeChat Paper Finder
+# WeChat Paper Finder · 论文批量信息卡
 
-从 DOI、论文链接、微信公众号推荐或截图定位论文，默认输出精简信息卡：完整 DOI、作者与发表时机构、期刊年份、带年份和来源的影响因子、论文原文链接和核验状态。多篇自动汇总，保留输入来源，缺失字段明确标注。保留 `$wechat-paper-finder` 调用名和仓库名。
+**把导师分享的论文截图、公众号推文或 DOI，整理成格式统一、来源可查的论文信息卡。**
 
-## 默认使用：精简卡片
+支持一张截图中的多条推荐、一篇推文中的多篇论文，以及多个链接或 DOI。默认提供基本信息和论文原文链接；需要时再生成中文摘要、关联文献入口或复现资源清单。
 
-```text
-使用 $wechat-paper-finder 处理这些截图／链接／DOI，输出精简论文信息卡。
-```
+这是一个 **Codex Skill + Python 命令行工具**。Skill 负责组织模型的识别、检索与核验，脚本负责元数据查询、去重、缓存和导出。
 
-```bash
-python scripts/paper_finder.py prepare --doi '10.你的DOI' --profile basic --out results/paper --jif-cache work/jif-cache
-python scripts/paper_finder.py collect --manifests results/card1/papers.json results/card2/papers.json --profile basic --out results/batch --jif-cache work/jif-cache
-```
+[快速开始](#快速开始) · [输出示例](#输出示例) · [命令行使用](#命令行使用) · [扩展功能](#扩展功能) · [开发与验证](#开发与验证)
 
-输出 `basic-cards.md`、`basic-cards.csv`、`basic-cards.json`。单篇展示卡片，多篇提供总表和逐篇卡片；已核验的同 DOI／版本去重但保留所有输入来源。无法识别的输入也会保留。多张截图和多链接由 agent 分别识别后交给清单处理；CLI 不直接识图。
+## 能帮你做什么
 
-JIF 缓存保留原查询日期，30天内按期刊复用；过期标为待更新，实际更新失败可记录原因。作者机构和 JIF 仍需 agent 查阅权威来源，脚本不会自动完成缺失字段。具体填写方式见 [精简卡片工作流](references/basic-cards.md)。
+| 你提供 | 项目如何处理 |
+|---|---|
+| 一张或多张微信分享截图 | 识别各条推荐，检索对应论文，保留截图与论文的对应关系 |
+| 公众号链接、复制的正文或保存的文章 | 提取主要推荐论文；一篇推文可以对应多篇论文 |
+| 论文链接、DOI 或 arXiv ID | 查询正式书目信息，整理作者机构和原文链接 |
+| 多个来源重复推荐同一篇论文 | 对已核验的相同 DOI／版本合并卡片，保留全部来源 |
 
-skill 默认显式使用 `--profile basic`。为兼容已有使用方式，CLI 不传 profile 时仍生成完整报告，也可指定 `--profile full`。中文摘要、Connected Papers、复现资源和下载均为按需功能。性能需通过同模型、同工具的对照测试评估，不承诺固定秒数。
+默认处理**主要推荐论文**。候选不确定、来源打不开或字段缺失时，保留记录并标注待核实，不会强行给出完整答案。预印本与正式发表版本分别记录。
 
-验证方式、真实 DOI 样本和已完成／待完成的性能检查见 [测试与对照方案](references/benchmark.md)。
+## 快速开始
 
-这是一个 **Codex Skill + Python 命令行工具** 小项目。模型负责理解推文、处理中文译名和判断论文角色；脚本负责元数据查询、候选整理、下载与文件校验。完整 Skill 需要具备相应工具的 agent；CLI 本身主要识别明确的标识符和带标签的题名。
+### 1. 安装到 Codex
 
-## 按需扩展：完整研究准备报告
-
-| 模块 | 输出 | 实际执行方式 |
-|---|---|---|
-| 基本信息卡 | 题名、完整 DOI、作者—机构对应、文章类型、带年份和来源的 JIF、原始摘要的中文翻译 | Crossref/arXiv 提供可用书目信息；agent 查阅出版社及指标页面，核对并翻译 |
-| 关联文献入口 | Connected Papers 检索入口，以及找到后记录的实际图谱链接 | CLI 生成检索入口；agent 获取真实图谱地址、核对起点；失败时保留明确标注的检索入口 |
-| 复现准备清单 | 原始／处理数据、代码、软件环境、材料、仪器、补充材料、协议和缺失信息 | agent 查阅声明、方法和附件，脚本保存资源归属及证据、检查字段并导出 Markdown/CSV |
-
-**单独运行 CLI 得到的是待补全草稿。** 它不会自动翻译摘要、推断仪器型号、执行代码或穷尽寻找数据。Skill 中的 agent 按工作流实际查阅并完成这些步骤。未知信息保持待确认；“找到资源”不等于“实际复现成功”。
-
-Connected Papers 检索入口始终使用论文完整英文题名，不使用 DOI、arXiv 编号或公众号中文标题；原文题名缺失时标为待补充。图谱网址不会根据 DOI 猜造。`search_only` 是检索入口，`provided` 是尚未核验的用户图谱链接，`verified` 表示 agent 已检查起点论文并登记证据。第三方网站覆盖、登录、额度或页面变动会影响获取最终图谱网址。
-
-基本调用：
-
-```text
-使用 $wechat-paper-finder 为这篇论文生成研究准备报告：[DOI、链接或截图]
-需要作者与所属机构、完整 DOI、带年份的影响因子、中文摘要、
-Connected Papers 入口，以及数据、代码、环境、材料仪器和补充材料的清单。
-```
-
-命令行直接建立草稿：
+需要 **Python 3.10+**。在终端执行：
 
 ```bash
-python scripts/paper_finder.py prepare --doi '10.你的DOI' --out results/paper --cache work/cache
-# 已有 papers.json：
-python scripts/paper_finder.py prepare --manifest results/paper/papers.json --out results/paper
-```
-
-agent 阅读生成的 `research-details.json`，按 [研究准备工作流与字段](references/research-preparation.md) 查阅并填写，然后合并：
-
-```bash
-python scripts/paper_finder.py prepare --manifest results/paper/papers.json --details work/reviewed-details.json --out results/paper
-```
-
-也可先对已经按要求转换的 Markdown 收集资源 URL 线索：
-
-```bash
-python scripts/paper_finder.py scan-resources --input work/paper.md --source-url 'https://出版社/文章' --doi '10.你的DOI' --out work/resource-candidates.json
-```
-
-扫描结果全部待核验；References 中的代码可能属于另一篇论文。软件版本、实验型号及访问条件以真实来源为准。对于 Review/Perspective，本文资源与引用研究资源分别记录，不把引用的研究误当成本文原始实验。
-
-离线演示使用虚构题名、DOI、机构和证据，演示导出而不查询虚构 DOI：
-
-```bash
-python scripts/paper_finder.py report --manifest examples/research-manifest.example.json --out results/research-demo
-python scripts/paper_finder.py prepare --manifest results/research-demo/papers.json --details examples/research-details.example.json --out results/research-demo
-```
-
-新输出增加 `research-report.md`、`research-details.json` 和可用 Excel 打开的 UTF-8 CSV `reproduction-checklist.csv`；旧清单、BibTeX 和 PDF 仍保留在同一目录。请求资源清单本身不会下载大型数据或安装运行环境。
-
-## 能做什么
-
-- 接收微信公众号 URL、保存的 HTML、文字或 Markdown；通过 agent 的 OCR/视觉、文档工具接收截图和 PDF/Word。
-- 接收导师转发的文章分享卡片截图：识别可见标题、公众号名和摘要，搜索并核对原推文，再从全文识别论文。
-- 原公众号不可读时，可从中文导读检索科研报道并核对出版社；论文身份和截图归属分别标注，研究报告可以保留“对应关系待确认”。
-- 一张截图含多张卡片时逐条查找；一篇推文介绍多篇论文时逐篇记录，最后汇总并保留推文与论文的对应关系。
-- 保留原文证据、来源与匹配依据，区分主要推荐、背景引用和延伸阅读。
-- 用 Crossref 查询 DOI/题名，用 arXiv 查询明确的 ID 和版本。
-- 每次逐篇明确列出完整 DOI 号和可点击的 DOI 链接；聊天回复、下载结果及汇总报告均适用。候选 DOI 标注“待核验”，查不到时明确显示“未查到／待确认”。
-- 发现并保留候选；存在冲突或只有中文译名时由 agent 进一步核验。
-- 从 arXiv、Europe PMC OA、Unpaywall 或明确授权的链接获取正文 PDF。
-- 检查 PDF 格式、可读性和首页题名；记录版本、来源、页数与 SHA-256。
-- 输出 Markdown 报告、JSON 清单、BibTeX 和 PDF；重跑时校验已有文件。
-
-## 安装与本地使用
-
-需要 Python 3.10+。在克隆或解压后的项目目录执行：
-
-```bash
-python -m pip install '.[pdf]'
+git clone https://github.com/dongbaiwei/wechat-paper-finder.git
+cd wechat-paper-finder
 python scripts/install_skill.py
 ```
 
-安装脚本将 `SKILL.md`、`agents/`、`references/`、`scripts/` 复制到 `$CODEX_HOME/skills/wechat-paper-finder`；未设置 `CODEX_HOME` 时使用 `~/.codex/skills/`。已有同名技能时停止，确认更新后加 `--update`。也可用 `--skills-dir PATH` 指定位置。
+安装位置为 `$CODEX_HOME/skills/wechat-paper-finder`；未设置 `CODEX_HOME` 时使用 `~/.codex/skills/wechat-paper-finder`。如果当前聊天没有显示技能，请打开新聊天。
 
-如果 `python` 不在 PATH，请使用实际 Python 路径；不需要把密钥或账号放入项目。安装后若当前聊天未列出技能，打开新聊天。
+> Windows 上如果 `python` 不可用，可使用 `py` 或实际 Python 路径。基本元数据查询使用 Python 标准库，无必填 API key。处理截图还需要所在 AI 环境具备视觉／OCR 和联网检索能力。
 
-直接对 Codex 说：
+### 2. 上传材料并调用
 
-```text
-使用 $wechat-paper-finder 找出这篇公众号推文主要推荐的论文，
-核实正式题名并给出 DOI 和原文链接：[推文链接]
-```
+上传截图后，或在消息后附上链接／DOI：
 
 ```text
-使用 $wechat-paper-finder 识别这几张截图中的原论文，
-能合法下载的正文也下载到我指定的文件夹。
+使用 $wechat-paper-finder 处理这些截图，输出精简论文信息卡。
 ```
 
-只要求找链接时不会运行下载。默认处理主要推荐论文；可明确要求全部参考文献。下载器只处理正文 PDF；补充材料和机构访问由 agent 按请求调用相应工具。
+批量处理也可以一次说明：
 
-## 可选解析与全文配置
+```text
+使用 $wechat-paper-finder 处理下面的多个 DOI，合并重复论文，
+输出信息总表和每篇论文的详细卡片，并保存 Markdown、CSV 和 JSON。
+```
 
-| 功能 | 依赖／配置 |
+### 3. 查看结果
+
+单篇直接展示信息卡；多篇提供总表与逐篇卡片，并导出：
+
+| 文件 | 用途 |
 |---|---|
-| 文字、HTML、Crossref、arXiv 元数据 | Python 标准库；无需必填 API key |
-| PDF 校验 | `pip install '.[pdf]'` 中的 `pypdf` |
-| 图片截图 | agent 的 OCR/视觉能力；在原作者环境中使用 `ds-vision-skill` |
-| PDF/Word 转 Markdown | MinerU 或配置好的文档解析工作流；在原作者环境中遵循先转 Markdown 的规则 |
-| 跨学科开放全文查询 | `UNPAYWALL_EMAIL` 环境变量；使用你自己的联系邮箱 |
-| 机构全文 | 用户授权的浏览器会话或下载工具；不是本 CLI 自带能力 |
+| `basic-cards.md` | 阅读、分享和保存论文卡片 |
+| `basic-cards.csv` | 用 Excel 查看、筛选和整理 |
+| `basic-cards.json` | 保存结构化字段、来源和核验状态 |
 
-Unpaywall 是可选来源；未设置邮箱时仍可检索论文并尝试 arXiv／Europe PMC 范围内的开放全文。不要使用虚构邮箱。
-
-PowerShell：
-
-```powershell
-$env:UNPAYWALL_EMAIL = '你的联系邮箱'
-```
-
-macOS/Linux：
+更新已安装的 skill 时，先检查本地自定义修改，再执行：
 
 ```bash
-export UNPAYWALL_EMAIL='你的联系邮箱'
+git pull --ff-only
+python scripts/install_skill.py --update
 ```
 
-不要提交含个人邮箱的配置文件。OCR、MinerU、学术接口会把相应输入发送给所配置的服务；敏感材料可选择本地 OCR 或仅提交已提取的书目线索。程序不需要机构密码或导出的 Cookie。
+## 输出示例
 
-## 命令行示例
+每篇卡片固定包含以下信息。下表是**格式示意**，不是一篇真实论文的完整结果。
 
-如果输入是聊天里的文章分享卡片，agent 先用视觉工具读取可见线索，再生成找推文的检索计划：
+| 字段 | 展示内容 |
+|---|---|
+| 标题 | 正式论文标题 |
+| DOI | 完整 `10.…` 编号及可点击的 DOI 永久链接 |
+| 作者与机构 | 完整作者名单，以及每位作者发表时的所属机构 |
+| 期刊与年份 | 期刊名称、论文发表年份 |
+| 影响因子（JIF） | 数值、指标年份、来源链接、查询日期及缓存状态 |
+| 原文网站 | 出版社论文页面，或预印本的正式托管页面 |
+| 核验与缺失信息 | 论文身份是否核验、与输入是否对应、哪些字段仍待补充 |
+
+**DOI 每篇必列。** 查不到时显示“未查到／待确认”，候选编号标为“待核验”。论文身份已核验，也可能仍缺少机构或 JIF，字段状态会分别展示。
+
+JIF 按期刊和指标年份缓存，30天内复用并保留原查询日期；超过30天标为待更新，更新失败时记录原因。预印本没有自身的期刊影响因子。
+
+**完整作者机构和 JIF 可能需要模型继续查阅权威来源。** 单独运行 CLI 得到的可能是待补全卡片，缺失字段会如实标注。具体补充方式见[精简卡片工作流](references/basic-cards.md)。
+
+## 命令行使用
+
+以下命令在项目目录运行。截图和中文推文的理解由模型及其视觉、检索工具完成；CLI 接收整理后的标识符或清单。
+
+### 生成一篇论文的精简卡片
 
 ```bash
-python scripts/paper_finder.py discover --input examples/share-card.example.json --out work/discovery.json
+python scripts/paper_finder.py prepare --doi "10.1038/s41586-021-03819-2" --profile basic --out results/paper --cache work/http-cache --jif-cache work/jif-cache
 ```
 
-示例线索是虚构的，仅演示结构。`discover` 生成检索词，由 agent 使用可用搜索／浏览器执行；它不声称已经找到推文。找到候选后：
+这会查询元数据并生成卡片草稿。需要补充作者机构或指标时，编辑生成的 `research-details.json`，再按[字段说明](references/basic-cards.md)合并。
+
+### 汇总多份论文清单
+
+先分别准备各输入的 `papers.json`，再执行：
 
 ```bash
-python scripts/paper_finder.py extract --url 'https://mp.weixin.qq.com/s/实际推文' --discovery work/discovery.json --out work/intake.json
+python scripts/paper_finder.py collect --manifests results/card1/papers.json results/card2/papers.json --profile basic --out results/batch --jif-cache work/jif-cache
 ```
 
-输出保留分享截图来源，并对照实际页面的标题和公众号身份。标题被截断、同名推文或公众号不一致时保留待确认状态。导师姓名和聊天时间不用于推断公众号或发布日期。完整流程见 [分享卡片找原文](references/share-card-discovery.md)。
+汇总保留输入来源和失败项，并对已核验的相同 DOI／版本去重。跨批次复用 JIF 时，使用相同的 `--jif-cache` 目录。
 
-多卡片示例使用 `examples/share-cards.example.json`。`discover` 为每张卡片分别生成查询；读取候选推文时用 `--card card_001` 指定来源。每条推文单独输出目录后可以汇总：
+> **模式区别：** Skill 默认显式传入 `--profile basic`；为兼容旧用法，CLI 不传 `--profile` 时仍生成完整研究报告，也可显式指定 `--profile full`。
 
-```bash
-python scripts/paper_finder.py collect --manifests results/card_001/papers.json results/card_002/papers.json results/card_003/papers.json --out results/summary
-```
-
-`summary/report.md` 和 `collection.json` 保留每条推文的全部论文、各自核验状态及同一作品的多个来源；下载和 BibTeX 仍在各推文目录处理。不会把三张卡片强行转换成三篇论文。
-
-先解析推文，保留正文、链接和图片清单：
+<details>
+<summary>从推文或文本开始：提取 → 查询 → 生成卡片</summary>
 
 ```bash
 python scripts/paper_finder.py extract --input examples/post.md --out work/intake.json
-# 或：
-python scripts/paper_finder.py extract --url 'https://mp.weixin.qq.com/s/你的推文' --out work/intake.json
+python scripts/paper_finder.py resolve --input work/intake.json --out results/post --cache work/http-cache
+python scripts/paper_finder.py prepare --manifest results/post/papers.json --profile basic --out results/post
 ```
 
-agent 阅读 `work/intake.json`，合并同一论文的 DOI/题名线索，保留原文证据并设置 `role=main`。带有明确标识符的提取结果默认 `role=unknown`，需分类后才下载。自动发现的题名标签与 DOI 不会未经判断就合并。
+也可用 `extract --url "推文网址"`。模型需要审阅提取的线索、论文角色和候选匹配；`resolve` 的首选候选不一定就是正确论文。仅有中文宣传标题时通常需要额外检索。
 
-仓库提供已整理的**人工演示输入**，可以直接测试查询：
+分享卡片的发现命令、候选确认及来源对应规则见[分享卡片找原文](references/share-card-discovery.md)和[论文匹配规则](references/matching.md)。
+
+</details>
+
+## 扩展功能
+
+这些功能按需启用，默认信息卡不查询中文摘要、Connected Papers 或复现资源。
+
+| 需求 | 可以这样调用 |
+|---|---|
+| 中文摘要 | `使用 $wechat-paper-finder 补充这篇论文正式摘要的中文翻译。` |
+| 关联文献入口 | `使用 $wechat-paper-finder 查找这篇论文的 Connected Papers 图谱，无法取得时提供检索入口。` |
+| 复现资源清单 | `使用 $wechat-paper-finder 整理论文的数据、代码、环境、材料仪器和补充材料链接。` |
+| 完整研究准备报告 | `使用 $wechat-paper-finder 生成完整研究准备报告，包含以上三个模块。` |
+| 正文下载 | `使用 $wechat-paper-finder 下载这篇论文可合法获取的正文 PDF，保存到我指定的文件夹。` |
+
+完整报告额外生成 `research-report.md`、`research-details.json` 和 `reproduction-checklist.csv`。详细流程见[研究准备工作流](references/research-preparation.md)。
+
+<details>
+<summary>关联图谱与复现资源的核验方式</summary>
+
+- Connected Papers 使用**论文完整英文题名**检索。检索入口与实际图谱分别标注；只有检查过起点论文的图谱才记为已核验。
+- 资源清单区分本文作者提供、第三方工具和引用研究的资源；软件版本、材料型号及访问条件以原始来源为准。
+- 复现清单用于准备工作。它不会自动执行代码、安装实验环境或下载大型数据，也不代表已经成功复现。
+
+</details>
+
+<details>
+<summary>下载依赖、开放全文来源与可选配置</summary>
+
+启用 PDF 校验：
 
 ```bash
-python scripts/paper_finder.py resolve --input examples/intake.example.json --out results/demo --cache work/cache
+python -m pip install ".[pdf]"
 ```
 
-检查 `results/demo/report.md` 和 `papers.json`。真实输入的中文译名或研究描述可能需要 agent 补充检索。已核验候选可用 `confirm` 记录来源和理由；这个命令只是记录审阅结论，不能替代审阅：
+正文下载可使用 arXiv、Europe PMC OA、Unpaywall 或已核验的开放／授权链接。下载后检查格式、可读性和首页题名，并记录版本、页数及 SHA-256。BibTeX 只导出已核验记录。
+
+Unpaywall 可选，配置自己的联系邮箱后可增加开放全文查询覆盖：
+
+```powershell
+# Windows PowerShell
+$env:UNPAYWALL_EMAIL = '你的联系邮箱'
+```
 
 ```bash
-python scripts/paper_finder.py confirm --manifest results/demo/papers.json --paper paper_001 --candidate 1 --evidence-url 'https://真实的官方论文页面' --note '填写已经核对的原文线索及作者、题名或年份依据'
+# macOS / Linux
+export UNPAYWALL_EMAIL='你的联系邮箱'
 ```
 
-仅在结果有 `candidates` 时才使用 `confirm`。需要下载时：
+截图依赖所在 AI 环境的视觉／OCR 工具；PDF、Word 等文档需要可用的解析工作流。在原作者环境中分别使用 `ds-vision-skill` 和 MinerU。机构全文需要用户授权的浏览器会话或下载工具，CLI 不自带机构登录能力。默认下载正文，补充材料需另行请求。
 
-```bash
-python scripts/paper_finder.py download --manifest results/demo/papers.json --out results/demo --cache work/cache
-```
+</details>
 
-`--out` 必须是 manifest 所在目录，以保持文件路径有效。可用 `--include-related` 纳入已明确分类的背景／延伸阅读；未知角色仍会跳过。`--max-mb` 默认 80，范围 1–300。
+## 使用边界与数据说明
 
-```text
-results/demo/
-├── report.md
-├── papers.json
-├── references.bib
-└── PDFs/
-```
-
-JSON 保留完整证据和下载状态，BibTeX 只包含已核验记录。预印本标注为 preprint，不与正式发表版静默合并。PDF 校验偏保守：扫描件、出版社封面或特殊字体可能需要 OCR／人工确认。
-
-## 当前边界
-
-- 微信页面可能无法被普通 HTTP 请求读取。读取失败会明确报告，仍可用截图、复制正文或 agent 的浏览器继续。
-- CLI 不会仅凭一段中文宣传标题自动确认论文；这一步需要 agent 的检索与判断。
-- 找到 DOI 不等于拿到全文；开放索引可能缺少链接，出版商也可能限制自动下载。
-- 元数据默认使用 Crossref/arXiv；其他来源、中文数据库和 PMID 可由 agent 检索并补充已核实记录。
-- 不含付费墙绕过、自动机构登录、批量抓取公众号、定时监控或补充材料爬取。
-- MIT 许可适用于本项目代码，不改变论文、推文和第三方内容的许可。
+- 微信页面可能受登录、验证码或抓取限制影响；可改用截图或复制正文继续检索。
+- 找到 DOI 不保证能取得全文，开放索引和出版社访问条件会影响下载结果。
+- 元数据主要来自 Crossref／arXiv；缺失字段由模型检索并记录证据。
+- OCR、文档解析和检索可能将输入发送至所配置的服务；处理敏感材料时选择合适的本地工具或仅提供书目线索。
+- 真实截图、推文全文、论文 PDF、个人配置和缓存留在本地。项目不需要机构密码、导出的 Cookie 或上传到仓库的密钥。
 
 ## 开发与验证
 
 ```bash
-python -m pip install '.[dev]'
+python -m pip install ".[dev]"
 python -m unittest discover -s tests -v
 ```
 
-测试使用合成文本、模拟 API 响应和程序生成的 PDF，离线验证题名冲突、重复 DOI、arXiv 版本、OA 条件、错误文件、已有文件和输出行为。网络演示是独立的烟雾测试，不属于 CI 的稳定性断言。GitHub Actions 配置为 Windows/Linux，Python 3.10/3.12/3.13。
+离线测试覆盖候选冲突、重复 DOI、版本区分、缺失字段、JIF 缓存、PDF 校验及导出。GitHub Actions 配置覆盖 Windows／Linux 和 Python 3.10、3.12、3.13。
 
-```text
-SKILL.md                    agent 工作流入口
-agents/openai.yaml          技能显示信息
-scripts/paper_finder.py      提取、检索、下载和导出 CLI
-scripts/research_prepare.py  研究信息、图谱状态、资源证据检查与报告/CSV
-scripts/install_skill.py     安装技能有效载荷
-references/                 匹配规则与输出格式
-examples/                   不含私人信息的演示输入
-tests/                      离线行为测试
-```
+10个真实 DOI 的元数据烟测与缓存验证可单独运行；它不代表同模型端到端速度对照。样本、验证记录和对照方法见[测试与性能对照](references/benchmark.md)。
 
-## 上传到 GitHub
+| 位置 | 内容 |
+|---|---|
+| [SKILL.md](SKILL.md) | Skill 入口与工作流 |
+| [scripts/](scripts/) | 提取、查询、卡片导出、完整报告及安装脚本 |
+| [references/](references/) | 字段格式、核验规则和详细用法 |
+| [examples/](examples/) | 脱敏示例、合成演示及公开 DOI 样本 |
+| [tests/](tests/) | 离线行为测试 |
 
-此目录可以作为独立仓库。先确认只暂存源代码、说明、测试和演示输入，真实推文、下载论文、个人配置与缓存留在仓库外。`.gitignore` 已排除常见研究输出和配置。
+## 数据源与许可
 
-如已安装并登录 GitHub CLI，可在项目目录执行：
+[Crossref](https://github.com/Crossref/rest-api-doc) · [arXiv](https://info.arxiv.org/help/api/user-manual.html) · [Europe PMC](https://europepmc.org/RestfulWebService) · [Unpaywall](https://unpaywall.org/products/api)
 
-```bash
-git init -b main
-git add .
-git commit -m 'Initial release: WeChat paper finder skill and CLI'
-gh repo create wechat-paper-finder --public --source . --remote origin --push
-```
+本项目代码使用 [MIT License](LICENSE)，论文、推文及第三方内容遵循各自许可。
 
-若本机尚未设置 Git 提交身份，先配置你自己的 `user.name` 和 `user.email`。也可以在 GitHub 创建空仓库，再按页面给出的命令添加 remote 并推送。本项目不需要上传任何论文 PDF 或真实公众号全文。
-
-## 数据源文档
-
-- [Crossref REST API](https://github.com/Crossref/rest-api-doc)
-- [arXiv API](https://info.arxiv.org/help/api/user-manual.html)
-- [Europe PMC REST](https://europepmc.org/RestfulWebService)
-- [Unpaywall API](https://unpaywall.org/products/api) / [版本与许可字段](https://unpaywall.org/data-format)
-
-欢迎通过 issue 提供已脱敏的失败案例、预期结果和工具版本。请不要提交密钥、机构登录信息、私人推文或受限制的全文。
+欢迎通过 [Issues](https://github.com/dongbaiwei/wechat-paper-finder/issues) 提供已脱敏的失败案例、预期结果和工具版本。
