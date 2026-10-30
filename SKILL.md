@@ -1,17 +1,27 @@
 ---
 name: wechat-paper-finder
-description: Identify scholarly papers from WeChat posts, screenshots, DOI, arXiv IDs or saved articles and prepare evidence-backed research reports with author affiliations, Chinese abstract translation, dated journal impact factors, Connected Papers entries and data/code/software/materials/equipment checklists. Also find official links and optionally download lawful PDFs. Use for 公众号找论文、论文研究准备、复现资源清单 and scholarly paper information requests.
+description: Identify papers from WeChat screenshots, posts, links or DOI lists and produce batch information cards with complete DOI, author affiliations, sourced journal impact factors and official paper links. Supports optional research preparation and lawful PDF downloads when requested. Use for 公众号找论文、论文批量信息卡 and 论文研究准备.
 ---
 
-# Paper Research Preparation · WeChat Paper Finder
+# Batch Paper Cards · WeChat Paper Finder
 
 Turn a recommendation or paper identifier into an evidence-backed research preparation report. The skill keeps its original `wechat-paper-finder` invocation name. Use scripts for metadata lookup, evidence validation and exports; the agent must actually inspect sources, interpret affiliations and resource ownership, and translate abstracts. Running the CLI alone produces a draft with pending fields, not a completed research investigation.
 
-For a research preparation request deliver all three: basic information card, Connected Papers entry, and reproduction resource checklist. For an explicit link-only, download-only or single-module request, respect that scope.
+Default to **basic cards**, including requests for 模块1 or 极速模式: official title, full DOI and DOI URL, complete authors and affiliation mappings, journal/year, JIF value/year/source/lookup date, official article URL and verification/missing-field status. Do not fetch or translate abstracts, visit Connected Papers, or investigate reproduction resources by default. Respect explicit narrower requests. For explicitly requested full research preparation, use the existing full workflow below.
+
+## Default: compact batch cards
+
+Read [references/basic-cards.md](references/basic-cards.md) for commands, the JIF cache and batch output. Use `prepare --profile basic` for each resolved input and `collect --profile basic` for multiple inputs. Skip the optional full research-preparation section and its references for this route. CLI defaults remain `full` for backward compatibility; the skill must explicitly pass `--profile basic`.
+
+Identify the paper before enriching fields. Read an authoritative publisher/metadata record and stop identity searching when it agrees with the input clues; expand the search only for conflicting candidates or missing information. A Chinese headline match alone is insufficient. Reuse evidence already inspected in the session. Missing affiliations require an authoritative author-affiliation record; do not use authors' current institutions.
+
+Check the shared journal metrics cache before searching JIF. Reuse entries checked within 30 days with their original lookup dates, and perform at most one JIF lookup per journal per batch. Old entries require a refresh attempt; if it fails, retain the dated value with an explicit stale/update-failed label. Never turn another metric into JIF. Prepare/collect only validate and cache metrics supplied by the agent; they do not independently find JIF online.
+
+Accept multiple screenshots, multiple cards per screenshot, DOI/link lists and multiple main papers per post. Keep one manifest per input/card, retain failures, and never assume one card equals one paper. Deliver completed cards while marking missing fields, without repeatedly retrying blocked sources. Do not promise a fixed response time. Record actual end-to-end durations separately from script timings when benchmarking.
 
 ## Intake and reading
 
-Accept a DOI, arXiv ID, paper/publisher URL, post URL, copied text, screenshots, saved HTML, PDF or Word. A supplied paper DOI can go directly to `prepare --doi "10.…" --out results/paper --cache work/http-cache`; use `--arxiv-id` for an explicit ID/version. For publisher URLs inspect official bibliographic information and confirm the DOI; do not treat every paper URL as a WeChat post. Read only the relevant input route:
+Accept a DOI, arXiv ID, paper/publisher URL, post URL, copied text, screenshots, saved HTML, PDF or Word. A supplied paper DOI can go directly to `prepare --doi "10.…" --profile basic --out results/paper --cache work/http-cache`; use `--arxiv-id` for an explicit ID/version. For publisher URLs inspect official bibliographic information and confirm the DOI; do not treat every paper URL as a WeChat post. Read only the relevant input route:
 
 User/workspace extraction rules take precedence. If they require MinerU-to-Markdown before reading saved HTML or other documents, follow that route first; the HTML helper may still preserve link and article-identity metadata as a supplement.
 

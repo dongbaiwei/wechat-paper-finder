@@ -1,10 +1,29 @@
-# 论文研究准备助手 · WeChat Paper Finder
+# 论文批量信息卡 · WeChat Paper Finder
 
-从 DOI、论文链接、微信公众号推荐或截图定位论文，输出基本信息卡、Connected Papers 入口和有证据的复现资源清单；按需下载可合法获取的正文 PDF。保留 `$wechat-paper-finder` 调用名和仓库名。
+从 DOI、论文链接、微信公众号推荐或截图定位论文，默认输出精简信息卡：完整 DOI、作者与发表时机构、期刊年份、带年份和来源的影响因子、论文原文链接和核验状态。多篇自动汇总，保留输入来源，缺失字段明确标注。保留 `$wechat-paper-finder` 调用名和仓库名。
+
+## 默认使用：精简卡片
+
+```text
+使用 $wechat-paper-finder 处理这些截图／链接／DOI，输出精简论文信息卡。
+```
+
+```bash
+python scripts/paper_finder.py prepare --doi '10.你的DOI' --profile basic --out results/paper --jif-cache work/jif-cache
+python scripts/paper_finder.py collect --manifests results/card1/papers.json results/card2/papers.json --profile basic --out results/batch --jif-cache work/jif-cache
+```
+
+输出 `basic-cards.md`、`basic-cards.csv`、`basic-cards.json`。单篇展示卡片，多篇提供总表和逐篇卡片；已核验的同 DOI／版本去重但保留所有输入来源。无法识别的输入也会保留。多张截图和多链接由 agent 分别识别后交给清单处理；CLI 不直接识图。
+
+JIF 缓存保留原查询日期，30天内按期刊复用；过期标为待更新，实际更新失败可记录原因。作者机构和 JIF 仍需 agent 查阅权威来源，脚本不会自动完成缺失字段。具体填写方式见 [精简卡片工作流](references/basic-cards.md)。
+
+skill 默认显式使用 `--profile basic`。为兼容已有使用方式，CLI 不传 profile 时仍生成完整报告，也可指定 `--profile full`。中文摘要、Connected Papers、复现资源和下载均为按需功能。性能需通过同模型、同工具的对照测试评估，不承诺固定秒数。
+
+验证方式、真实 DOI 样本和已完成／待完成的性能检查见 [测试与对照方案](references/benchmark.md)。
 
 这是一个 **Codex Skill + Python 命令行工具** 小项目。模型负责理解推文、处理中文译名和判断论文角色；脚本负责元数据查询、候选整理、下载与文件校验。完整 Skill 需要具备相应工具的 agent；CLI 本身主要识别明确的标识符和带标签的题名。
 
-## v0.2：三个交付模块
+## 按需扩展：完整研究准备报告
 
 | 模块 | 输出 | 实际执行方式 |
 |---|---|---|

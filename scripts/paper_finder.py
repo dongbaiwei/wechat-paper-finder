@@ -24,7 +24,7 @@ from difflib import SequenceMatcher
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DOI_RE = re.compile(r"10\.\d{4,9}/[^\s<>\"`\u201c\u201d\u3002\uFF0C\uFF1B]+", re.I)
 ARXIV_RE = re.compile(r"(?:arxiv\s*:\s*|arxiv\.org/(?:abs|pdf)/)([a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)", re.I)
 ROLES = {"main", "background", "related", "unknown"}
@@ -341,7 +341,7 @@ def crossref_record(item):
     authors = [clean(" ".join(filter(None, [a.get("given"), a.get("family")]))) or a.get("name", "") for a in item.get("author", [])]
     author_details = [{"name": name, "affiliations": [clean(a.get("name", "")) for a in author.get("affiliation", []) if a.get("name")], "orcid": author.get("ORCID", ""), "roles": []} for name, author in zip(authors, item.get("author", []))]
     abstract = parse_html(item.get("abstract", "")).text() if item.get("abstract") else ""
-    return {"doi": doi, "title": clean(first(item.get("title", []))), "authors": authors, "author_details": author_details, "abstract": abstract, "year": date[0][0] if date and date[0] else None, "published_date_parts": date[0] if date else [], "venue": clean(first(item.get("container-title", []))), "publisher": item.get("publisher", ""), "type": item.get("type", ""), "version": "preprint" if item.get("type") == "posted-content" else "published_record", "doi_url": f"https://doi.org/{doi}" if doi else "", "publisher_url": item.get("resource", {}).get("primary", {}).get("URL") or item.get("URL", ""), "metadata_source": "Crossref", "metadata_url": "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="")}
+    return {"doi": doi, "title": clean(first(item.get("title", []))), "authors": authors, "author_details": author_details, "abstract": abstract, "year": date[0][0] if date and date[0] else None, "published_date_parts": date[0] if date else [], "venue": clean(first(item.get("container-title", []))), "issn": sorted(item.get("ISSN", [])), "publisher": item.get("publisher", ""), "type": item.get("type", ""), "version": "preprint" if item.get("type") == "posted-content" else "published_record", "doi_url": f"https://doi.org/{doi}" if doi else "", "publisher_url": item.get("resource", {}).get("primary", {}).get("URL") or item.get("URL", ""), "metadata_source": "Crossref", "metadata_url": "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="")}
 
 
 def title_similarity(a, b):
@@ -767,6 +767,8 @@ def main(argv=None):
     collect = commands.add_parser("collect", help="Build a many-post, many-paper summary while preserving per-post provenance")
     collect.add_argument("--manifests", type=Path, nargs="+", required=True)
     collect.add_argument("--out", type=Path, required=True)
+    collect.add_argument("--profile", choices=["basic", "full"], default="full")
+    collect.add_argument("--jif-cache", type=Path, help="Shared journal metrics cache; defaults to work/jif-cache")
     prepare = commands.add_parser("prepare", help="Create a research dossier, graph entry and evidence-backed reproduction checklist")
     origin = prepare.add_mutually_exclusive_group(required=True)
     origin.add_argument("--manifest", type=Path)
@@ -775,6 +777,8 @@ def main(argv=None):
     prepare.add_argument("--details", type=Path, help="Agent-reviewed research details bound to matching paper IDs and DOI/arXiv identifiers")
     prepare.add_argument("--out", type=Path, required=True)
     prepare.add_argument("--cache", type=Path)
+    prepare.add_argument("--profile", choices=["basic", "full"], default="full")
+    prepare.add_argument("--jif-cache", type=Path, help="Shared journal metrics cache; defaults to work/jif-cache")
     scan = commands.add_parser("scan-resources", help="Find unverified resource URL leads in already-converted Markdown")
     scan.add_argument("--input", type=Path, required=True)
     scan.add_argument("--source-url", required=True)
@@ -796,8 +800,8 @@ def main(argv=None):
                     raise PaperError("A valid DOI is required")
                 intake = resolve_papers({"schema_version": 1, "source": args.doi or args.arxiv_id, "papers": [new_paper(1, role="main", doi=doi, arxiv_id=args.arxiv_id or "")]}, client)
             details = json.loads(args.details.read_text(encoding="utf-8-sig")) if args.details else None
-            result = prepare_report(intake, args.out, details)
-            summary = {"status": "prepared", "papers": len(result["papers"]), "verified": sum(p.get("verification", {}).get("status") == "verified" for p in result["papers"]), "path": str(args.out), "note": "Agent must inspect sources, verify resource ownership and translate abstracts; empty fields remain pending."}
+            result = prepare_report(intake, args.out, details, profile=args.profile, jif_cache=args.jif_cache or Path("work/jif-cache"))
+            summary = {"status": "prepared", "profile": args.profile, "papers": len(result["papers"]), "verified": sum(p.get("verification", {}).get("status") == "verified" for p in result["papers"]), "path": str(args.out), "note": "Missing fields remain pending; basic profile only requires bibliography, affiliations and journal metrics." if args.profile == "basic" else "Agent must inspect sources, verify resource ownership and translate abstracts; empty fields remain pending."}
         elif args.command == "scan-resources":
             from research_prepare import scan_resources
             result = scan_resources(args.input, args.source_url, args.doi)
@@ -872,7 +876,11 @@ def main(argv=None):
                 export(result, args.out)
             summary = {"status": "download_batch_finished", "results": {p["id"]: p.get("download", {}).get("status") for p in result["papers"]}, "path": str(args.out)}
         elif args.command == "collect":
-            result = collect_manifests(args.manifests, args.out)
+            if args.profile == "basic":
+                from basic_cards import collect_basic
+                result = collect_basic(args.manifests, args.out, args.jif_cache or Path("work/jif-cache"))
+            else:
+                result = collect_manifests(args.manifests, args.out)
             summary = {"status": "collected", "posts": len(result["posts"]), "unique_verified_works": len(result["unique_verified_works"]), "path": str(args.out)}
         else:
             result = read_json(args.manifest)

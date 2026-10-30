@@ -83,7 +83,7 @@ def connected_papers(paper, supplied):
     return graph
 
 
-def normalize_research(paper):
+def normalize_research(paper, profile="full"):
     metadata = paper.get("metadata", {})
     research = copy.deepcopy(paper.get("research", {}))
     identity = "arxiv:" + metadata["arxiv_id"] if metadata.get("arxiv_id") else wpf.normalize_doi(metadata.get("doi", ""))
@@ -104,6 +104,10 @@ def normalize_research(paper):
     for name in metadata.get("authors", []):
         if wpf.norm(name) not in {wpf.norm(a["name"]) for a in bibliography["author_details"]}:
             bibliography["author_details"].append({"name": name, "affiliations": [], "roles": []})
+    if profile == "basic":
+        from basic_cards import validate_impact
+        validate_impact(research.setdefault("impact_factor", {}), metadata.get("venue", ""))
+        return research
     abstract = research.setdefault("abstract", {})
     abstract.setdefault("original", metadata.get("abstract", ""))
     abstract.setdefault("translation_zh", "")
@@ -323,7 +327,7 @@ def render_report(manifest, outdir):
         writer.writerows([["'" + value if isinstance(value, str) and value.startswith(("=", "+", "-", "@")) else value for value in row] for row in checklist])
 
 
-def prepare_report(manifest, outdir, details=None):
+def prepare_report(manifest, outdir, details=None, profile="full", jif_cache=None):
     result = copy.deepcopy(manifest)
     if details is not None:
         if details.get("schema_version") != 1 or not isinstance(details.get("papers"), list):
@@ -343,6 +347,9 @@ def prepare_report(manifest, outdir, details=None):
             if not doi and (not metadata.get("arxiv_id") or entry.get("arxiv_id") != metadata["arxiv_id"]):
                 raise ValueError("Without DOI, bind details to the exact arXiv ID/version")
             paper["research"] = merge(paper.get("research", {}), entry["research"])
+    if profile == "basic":
+        from basic_cards import prepare_basic
+        return prepare_basic(result, outdir, jif_cache)
     for paper in result["papers"]:
         paper["research"] = normalize_research(paper)
     outdir = Path(outdir)
